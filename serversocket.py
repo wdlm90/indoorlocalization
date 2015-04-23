@@ -1,202 +1,79 @@
+#coding=utf-8
+import sys
+
 from socket import *
 from time import ctime
 from scipy import signal
 from SocketServer import TCPServer,ThreadingMixIn,StreamRequestHandler
 import MySQLdb
+import json
 import numpy as np
 import csv
 import math
 import traceback
+
 class Server(ThreadingMixIn,TCPServer):pass
 class Handler(StreamRequestHandler):
     def handle(self):
+        try:
+            conn = MySQLdb.connect(host = '127.0.0.1',user = 'root',passwd = 'limeng90',port = 3306,db = 'mobilesensing')
+            cur = conn.cursor()
+            conn.set_character_set('utf8')
+            cur.execute('SET NAMES utf8;')
+            cur.execute('SET CHARACTER SET utf8;')
+            cur.execute('SET character_set_connection=utf8;')
+            print 'successfully connect to MySQL'
+        except:
+            print 'fail to connect to MySQL'
         while True:
             try:
+                print "begin to receive sensing data"
                 data = self.rfile.readline().strip()
-                print 'receive from (%r):%r' % (self.client_address,data)
+                print self.client_address,repr(data)
                 #self.wfile.write('Thank you for connecting')
-                value = data.split(',')
-                value.pop()
-                print value
-                conn = MySQLdb.connect(host = '128.199.143.119',username = 'root',passed = 'limeng90',port = 3306,db = 'mobilesensing')
-                cur = conn.cursor()
-                cur.execute('insert into SensorDataTbl values(%s,%s,%s)',value)
+                sensordata = json.loads(data)
+                #print "pythonobject:",type(sensordata)
+                values = (sensordata.get('projectname'),sensordata.get('username'),sensordata.get('timestamp'),\
+                          sensordata.get('label'),sensordata.get('datatype'),sensordata.get('acceX'),\
+                          sensordata.get('acceY'),sensordata.get('acceZ'),sensordata.get('gyrosX'),\
+                          sensordata.get('gyrosY'),sensordata.get('gyrosZ'),sensordata.get('orientX'),\
+                          sensordata.get('orientY'),sensordata.get('orientZ'),sensordata.get('magnetX'),\
+                          sensordata.get('magnetY'),sensordata.get('magnetZ'),sensordata.get('light'),\
+                          sensordata.get('barometer'),sensordata.get('soundlevel'),sensordata.get('cellid'),\
+                          sensordata.get('gpsLat'),sensordata.get('gpsLong'),sensordata.get('gpsAlt'),\
+                          sensordata.get('gpsSpeed'),sensordata.get('gpsBearing'),sensordata.get('wifiSSID1'),\
+                          sensordata.get('wifiBSSID1'),sensordata.get('wifiRSS1'),sensordata.get('wifiSSID2'),\
+                          sensordata.get('wifiBSSID2'),sensordata.get('wifiRSS2'),sensordata.get('wifiSSID3'),\
+                          sensordata.get('wifiBSSID3'),sensordata.get('wifiRSS3'),sensordata.get('wifiSSID4'),\
+                          sensordata.get('wifiBSSID4'),sensordata.get('wifiRSS4'),sensordata.get('wifiSSID5'),\
+                          sensordata.get('wifiBSSID5'),sensordata.get('wifiRSS5'),sensordata.get('wifiSSID6'),\
+                          sensordata.get('wifiBSSID6'),sensordata.get('wifiRSS6'),sensordata.get('wifiSSID7'),\
+                          sensordata.get('wifiBSSID7'),sensordata.get('wifiRSS7'),sensordata.get('wifiSSID8'),\
+                          sensordata.get('wifiBSSID8'),sensordata.get('wifiRSS8'),sensordata.get('wifiSSID9'),\
+                          sensordata.get('wifiBSSID9'),sensordata.get('wifiRSS9'),sensordata.get('wifiSSID10'),\
+                          sensordata.get('wifiBSSID10'),sensordata.get('wifiRSS10'))
+                query = "insert into SensorDataTbl values ('%s','%s',%d,'%s',%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%f,%f,%f,%f,%f,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d,'%s','%s',%d)" % values
+
+                #query = "insert into SensorDataTbl values('%(projectname)s','%(username)s',%(timestamp)d,'%(label)s',%(datatype)d,%(acceX)f,%(acceY)f,%(acceZ)f,%(gyrosX)f,%(gyrosY)f,%(gyrosZ)f，%(orientX)f，%(orientY)f，%(orientZ)f,%(magnetX)f,%(magnetY)f,%(magnetZ)f,%(light)f,%(barometer)f,%(soundlevel)f,%(cellid)d,%(gpsLat)f,%(gpsLong)f,%(gpsAlt)f,%(gpsSpeed)f,%(gpsBearing)f,'%(wifiSSID1)s','%(wifiBSSID1)s',%(wifiRSS1)d,'%(wifiSSID2)s','%(wifiBSSID2)s',%(wifiRSS2)d,'%(wifiSSID3)s','%(wifiBSSID3)s',%(wifiRSS3)d,'%(wifiSSID4)s','%(wifiBSSID4)s',%(wifiRSS4)d,'%(wifiSSID5)s','%(wifiBSSID5)s',%(wifiRSS5)d,'%(wifiSSID6)s','%(wifiBSSID6)s',%(wifiRSS6)d,'%(wifiSSID7)s','%(wifiBSSID7)s',%(wifiRSS7)d,'%(wifiSSID8)s','%(wifiBSSID8)s',%(wifiRSS8)d,'%(wifiSSID9)s','%(wifiBSSID9)s',%(wifiRSS9)d,'%(wifiSSID10)s','%(wifiBSSID10)s',%(wifiRSS10)d)"  % sensordata
+
+                print query
+                #testvalues = ('1','limeng','NULL')
+                #testquery = "insert into test values ('%s','%s',%d)" % testvalues
+                #print testquery
+                cur.execute(query)
                 conn.commit()
-                cur.close()
-                conn.close()
-            except MemoryError,e:
+                print "insert successfully"
+            except:
                 traceback.print_exc()
-                print "MySQL Error %d:%s" % (e.args[0].e.args[1])
                 break
+        cur.close()
+        conn.close()
 
 if __name__ == "__main__":
+    reload(sys)
+    sys.setdefaultencoding('utf8')
     host = ''
     port = 12345
     addr = (host,port)
     server = Server(addr,Handler)
     server.serve_forever()
-'''
-HOST = ''
-PORT = 12345
-BUFSIZE = 1024
-SERVERADDR = (HOST, PORT)
-sersocket = socket(AF_INET, SOCK_STREAM)
-sersocket.bind(SERVERADDR)
-sersocket.listen(10)
-#SLM = ["location":,"walkingdirection":,"wifi":,"mag":,"pedestrains' location":]
-
-while True:
-    print 'waiting for connection'
-    tcpClientSock,addr = sersocket.accept()
-    print '...connected from',addr
-    while True:
-        try:
-            tcpClientSock.settimeout(10)
-            sleep(10)
-            data = tcpClientSock.recv(BUFSIZE)
-            #s = 'Hi, you send me :[%s] %s' % (ctime(),data.decode('utf8'))
-            #print
-            print data
-            #value = data.split(',')
-            #map(lambda x: float(x), value)
-            #print value
-        except:
-            print addr,'time out'
-            tcpClientSock.close()
-            break
-            '''
-'''
-            try:
-                conn = MySQLdb.connect(host = '128.199.143.119',username = 'root',passed = 'limeng90',port = 3306,db = 'mobilesensing')
-                cur = conn.cursor()
-                cur.execute('insert into SensorDataTbl values(%s,%s,%s)',value)
-                conn.commit()
-                cur.close()
-                conn.close()
-            except MySQLdb.Error,e:
-                print "MySQL Error %d:%s" % (e.args[0].e.args[1])
-'''
-       
-'''
-        storeindatabase(s)
-        tcpClientSock.send(s.encode('utf8'))
-
-        window = getslidingwindow(window,data,k)
-
-        window_afterpreprocess = preprocess(window)
-
-        location = dead_reckoning(location,window_afterpreprocess)
-
-        recogresult,landmarktype, landmarkLocation = landmarkRecognition(window_afterpreprocess)
-
-        if recogresult:
-            updateLandmarkLib(location,win_afterprocess)
-            location = landmarkLocation        
-tcpClientSock.close()
-sersocket.close()j
-#set a sliding window to capture data
-def windowdata = refreshslidingwindow(window, data, k):
-    
-    return window
-'''
-window = []
-def getslidingwindow(window,sensor,k):
-    if len(window)<k:
-        window.append(sensor)
-    else:
-        window.pop(0)
-        window.append(sensor)
-    return window
-
-def lowpassfilter(window):
-    b,a = signal.butter(3,0.08,"low")
-    sf = signal.filtfilt(b,a,[sensor.getAcce() for sensor in window])
-    return [sensor.setAcce(sf) for sensor in window]
-# sequence of a pedestrian's state which may be walking, standing, running, elevator... 
-stateseq = []
-
-# sequence of sensor pattern, which contains local minimum(-1), local maximum(1) and stataionary(0) 
-patternseq = []
-'''
-# detect the sensor pattern to find out local minimum, local maximum or stationary 
-def sensorPatternDetection(window,thd):
-    if len(window)<=1
-        return
-    trend = "stable"
-    i = 1;
-    while(i<=length-1):
-        if trend == "stable":
-            if window[i].getAcce()-window[i-1].getAcce() > thd:
-                trend = "up"
-            elif window[i].getAcce()-window[i-1].getAcce() < -thd:
-		trend = "down"
-            else:
-		trend = "stable"
-		if window[i].getTimestamp() not in [eachpattern.getTimestamp() for eachpattern in patternseq]
-                pattern = Pattern(windowp[i].getTimestamp(),0)
-                patternseq.append(pattern)
-	if trend == "up"
-            if window[i].getAcce()-window[i-1].getAcce() > thd:
-                trend = "up"
-            elif window[i].getAcce()-window[i-1].getAcce() < -thd:
-		trend = "down"
-		if window[i].gettimestamp not in [eachpattern.getTimestamp() for eachpattern in patternseq]
-                    pattern = Pattern(window[i].getTimestamp(),1)
-                    patternseq.append(pattern)
-            else:
-		trend = "stable"
-	if trend == "down":
-            if window[i].getAcce()-window[i-1].getAcce() > thd:
-                trend = "up"
-		if window[i].gettimestamp not in [eachpattern.getTimestamp() for eachpattern in patternseq]
-                    pattern = Pattern(window[i].getTimestamp(),-1)
-                    patternseq.append(pattern)
-            elif window[i].getAcce()-window[i-1].getAcce() < -thd:
-		trend = "down"
-            else:
-		trend = "stable"    
- 
-# dectect the state of a pedestrian (1,0,...,0,-1) represents elevator down (-1,0...,0,1) represents elevatorup 
-def elevatorDetection(patternseq):
-    if patternseq==None
-        return
-    state = "standingin"
-    for i in range(len(patternseq)):
-        if state == "standingin":
-            if patternseq[i].getAcce() == 1:
-                state = "elevatordown_start"
-            elif patternseq[i].getAcce() == -1:
-                state = "elevatorup_start"
-        elif state == "elevatordown_start"
-            if patternseq[i].getAcce() == 0:
-                state = "elevatordown_stable"
-            else:
-                state = None
-        elif state == "elevatorup_start"
-            if patternseq[i].getAcce() == 0:
-                state = "elevatorup_stable"
-            else:
-                state = None
-        elif state == "elevatordown_stable"
-            if patternseq[i].getAcce() == -1:
-                state = "elevatordown_stop"
-            elif patternseq[i].getAcce() == 0:
-                state = "elevatordown_stable"
-            else:
-                state = None
-        elif state == "elevatorup_stable":
-            if patternseq[i].getAcce() == 1:
-                state = "elevatorup_stop"
-            elif patternseq[i].getAcce() == 0:
-                state = "elevatorup_stable"
-            else:
-                state = None
-    if state == "elevatorup_stop" or "elevatordown_stop"
-        print state
-    return state
-        
-   '''     
-
-    
-    
-    
