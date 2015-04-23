@@ -15,10 +15,18 @@ class Handler(StreamRequestHandler):
                 data = self.rfile.readline().strip()
                 print 'receive from (%r):%r' % (self.client_address,data)
                 #self.wfile.write('Thank you for connecting')
-                Sensordatalist = data.split(',')
-                print Sensordatalist
-            except:
+                value = data.split(',')
+                value.pop()
+                print value
+                conn = MySQLdb.connect(host = '128.199.143.119',username = 'root',passed = 'limeng90',port = 3306,db = 'mobilesensing')
+                cur = conn.cursor()
+                cur.execute('insert into SensorDataTbl values(%s,%s,%s)',value)
+                conn.commit()
+                cur.close()
+                conn.close()
+            except MemoryError,e:
                 traceback.print_exc()
+                print "MySQL Error %d:%s" % (e.args[0].e.args[1])
                 break
 
 if __name__ == "__main__":
