@@ -35,7 +35,7 @@ def filtSensordata(feaArr):
     feaArrfilt = array([acce_xfilt,acce_yfilt,acce_zfilt,gyros_xfilt,gyros_yfilt,gyros_zfilt]).T
     return feaArrfilt
 
-def detectEndPoint(accez,start):
+def detectStep(accez,start,end):
     print "begin to detect end point"
     steppoint = 0
     i = start+1
@@ -63,7 +63,7 @@ def detectEndPoint(accez,start):
                 j += 1
         i += 1
     return steppoint
-
+    
 def detectActivity(feaArr,duration,thd1,thd2):
     print "start to detect activity"
     accexfilt = feaArr[:,0]
@@ -80,20 +80,24 @@ def detectActivity(feaArr,duration,thd1,thd2):
     fealen = len(feaArr)
     print "fealen:%d"% fealen
     while start < end and start < fealen and end < fealen:
-        while mean(accemod[start:end])<thd1 and max(accemod[start:end])<thd2 and end < fealen:
-            end += 1
-        if end - start >= duration:
-            print "detect one start point %d,%d" %(start,end)
-            endpoint = detectEndPoint(accezfilt,end)
-            if endpoint and endpoint - start > 80:
-                print "detect one endpoint:%d" % endpoint
-                activities.append(feaArr[start:endpoint,:])
-                start = endpoint + 1
+        if (not detectStep(accezfilt,start,start+200)) and start < end:
+            startpoint = start
+            print "detect one activity start point %d,%d" %(startpoint)
+            steppoint = detectStep(accezfilt,start,len(accezfilt))
+            if steppoint and steppoint - startpoint > 100:
+                endpoint = steppoint
+                print "detect one activity endpoint:%d" % endpoint
+                activities.append(feaArr[startpoint:endpoint,:])
+                start = endpoint
                 end = start + 10
+                continue
+            elif (not steppoint) and len(accezfilt)-startpoint>100:
+                endpoint = len(accezfilt)-1
+                print "detect one activity endpoint and it is data end:%d" % endpoint
+                activities.append(feaArr[startpoint:endpoint,:])
+                break
             else:
-                print "fail to detect endpoint %d,%d" %(endpoint,(endpoint-start))
-                start = end + 10
-                end = start + 10
+                break
         else:
             start += 10
             end = start + 10
@@ -199,8 +203,7 @@ def dtwDist(x):
             distance,cost,path=dtw(x[i,:],x[j,:])
             dist[i,j]=distance
     return dist
-dist = dtwDist([[1,2],[1,1]])
-print dist
+
 activitiesofAll = []
 for data in dataset:
     feaArr = data[:,3:9]
