@@ -39,14 +39,14 @@ def detectStep(accez,start,end):
     print "begin to detect end point"
     steppoint = 0
     i = start+1
-    while i < len(accez)-1:
+    while i < end:
         maxpoint = 0
         minpoint = 0
         if accez[i] > accez[i-1] and accez[i] > accez[i+1] and accez[i] > 0.5:
             maxpoint = i
             print "peak:%d" % maxpoint
             j = i+1
-            while j < len(accez)-1:
+            while j < end:
                 if accez[j] < accez[j-1] and accez[j] < accez[j+1] and accez[j] < -0.5:
                     minpoint = j
                     if 10 < minpoint - maxpoint < 105:
@@ -115,28 +115,40 @@ def miniActivityType(accex,accey):
     elif accex>0 and accey<0:
         type = '4'
     return type
-
+#detect split point of activity and divide activity into several miniactivities
+def detectSplitPoint(rotateveclist):
+    splitpoint = []
+    i = 1
+    lastpoint = rotateveclist[0,:]
+    for j in range(3):
+        for i in range(len(rotateveclist)):
+            if (rotateveclist[i-1,j]<rotateveclist[i,j] and\
+            rotateveclist[i,j]>rotateveclist[i+1,j] and\
+            abs(rotateveclist[i,j]-lastpoint[j])>30) or\
+            (rotateveclist[i,j]<rotateveclist[i-1,j] and\
+            rotateveclist[i,j]<rotateveclist[i+1,j] and\
+            abs(rotateveclist[i,j]-lastpoint[j])>30):
+                splitpoint.append(i)
+                lastpoint[j] = rotateveclist[i,j]
+    splitpoint.sort()
+    return splitpoint
+    
 #divide activity into seveval miniactivities based on motion orientation
 def divideMiniActivity(activities):
     miniActofAllAct = []
     for activity in activities:
-        miniActofOneAct = []
-        accex = activity[0][0]
-        accey = activity[0][1]
-        preminitype = miniActivityType(accex,accey)
-        miniactvalue = []
-        miniactvalue.append(activity[0])
-        for i in range(1,len(activity)):
-            curminitype = miniActivityType(activity[i,0],activity[i,1])
-            if curminitype == preminitype:
-                miniactvalue.append(activity[i,:])
-            else:
-                miniActofOneAct.append({"value":miniactvalue,"type":preminitype})
-                miniactvalue = []
-                miniactvalue.append(activity[i,:])
-                preminitype = miniActivityType(activity[i,0],activity[i,1])
-        miniActofOneAct.append({"value":miniactvalue,"type":preminitype})
-        miniActofAllAct.append(miniActofOneAct)
+        activity = array(activity)
+        timestamp = activity[:,0]
+        feaArr = activity[:,1:7]
+        rotationvecArr = getRotationlist(timestamp,feaArr)
+        splitpointlist = detectSplitPoint(rotationvecArr)
+        start = 0
+        miniactivities = []
+        for splitpoint in splitpointlist:
+            end = splitpoint
+            miniactivities.append(activity[start:end,:])
+            start = end
+        miniActofAllAct.append(miniactivities)
     return miniActofAllAct
 
 #extract features of mean and std from filter sample.
@@ -171,7 +183,7 @@ def feaExtraction(activities):
             miniactfea.append(ratationlist[-1,1])
             miniactfea.append(ratationlist[-1,2])
             activityfea.append(miniactfea)
-        feasOfAct.append(activityfea)
+        feasOfAct.append(activityfea) 
     return feasOfAct
 
 #get the rotation of gyrosscope of three axis
