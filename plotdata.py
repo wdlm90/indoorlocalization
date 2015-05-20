@@ -17,7 +17,6 @@ for e in fileList:
 #timestampArr = map(lambda x:float(x),timestampArr)
 #print "feature length :%d" % len(feaArr)
 #print feaMat[:10]
-dataset = loadDataSet("dataset/5.13/LiuYulu")
 def filtSensordata(feaArr):
     acce_xlist = map(lambda x:float(x),feaArr[:,0])
     acce_ylist = map(lambda x:float(x),feaArr[:,1])
@@ -36,7 +35,6 @@ def filtSensordata(feaArr):
     return feaArrfilt
 
 def detectStep(accez,start,end):
-    print "begin to detect end point"
     steppoint = 0
     i = start+1
     while i < end:
@@ -64,39 +62,28 @@ def detectStep(accez,start,end):
         i += 1
     return steppoint
     
-def detectActivity(feaArr,duration,thd1,thd2):
+def detectActivity(sensordata):
     print "start to detect activity"
-    accexfilt = feaArr[:,0]
-    acceyfilt = feaArr[:,1]
-    accezfilt = feaArr[:,2]
+    accezfilt = sensordata[:,3]
     activities = []
-    accemod = []
-    for accex,accey,accez in feaArr[:,0:3]:
-        acce2 = accex**2+accey**2+accez**2
-        accemod.append(math.sqrt(acce2))
-    #print accemod
     start = 0
     end = 1
     fealen = len(feaArr)
-    print "fealen:%d"% fealen
     while start < end and start < fealen and end < fealen:
         if (not detectStep(accezfilt,start,start+200)) and start < end:
             startpoint = start
-            print "detect one activity start point %d,%d" %(startpoint)
+            print "detect one activity start point %d" %(startpoint)
             steppoint = detectStep(accezfilt,start,len(accezfilt))
-            if steppoint and steppoint - startpoint > 100:
+            if steppoint and steppoint - startpoint > 50:
                 endpoint = steppoint
                 print "detect one activity endpoint:%d" % endpoint
-                activities.append(feaArr[startpoint:endpoint,:])
+                print "detect ont activity:%d,%d" %(startpoint,endpoint)
+                activities.append(sensordata[startpoint:endpoint,:])
                 start = endpoint
                 end = start + 10
-                continue
-            elif (not steppoint) and len(accezfilt)-startpoint>100:
-                endpoint = len(accezfilt)-1
-                print "detect one activity endpoint and it is data end:%d" % endpoint
-                activities.append(feaArr[startpoint:endpoint,:])
-                break
             else:
+                print "fail to detect endpoint"
+                print steppoint, startpoint
                 break
         else:
             start += 10
@@ -216,14 +203,19 @@ def dtwDist(x):
             dist[i,j]=distance
     return dist
 
+
+dataset = loadDataSet("dataset/5.13/LiuYulu")
 activitiesofAll = []
-for data in dataset:
-    feaArr = data[:,3:9]
-    timestampArr = data[:,0]
-    filtfea = filtSensordata(feaArr)
-    timestampArr = map(lambda x:float(x),timestampArr)
-    activities = detectActivity(filtfea)
-    activitiesofAll.append(activities)
+data = dataset[5]
+feaArr = data[:,3:9]
+timestamp = data[:,0]
+filtfea = filtSensordata(feaArr)
+timestamp = map(lambda x:float(x),timestamp)
+timestampArr = np.array([timestamp]).T
+sensordata = np.append(timestampArr,filtfea,1)
+activities = detectActivity(sensordata)
+activitiesofAll.append(activities)
+'''
 print len(activitiesofAll)
 activitiesofMini = divideMiniActivity(activities)
 activitiesfea = feaExtraction(activitiesofMini)
@@ -231,13 +223,12 @@ model = AgglomerativeClustering(n_clusters=n_clusters,linkage="average",affinity
 model.fit(activitiesfea)
 print model.label_
 
+
 '''
 
 
-
-
-print len(timestampArr),len(feaArr)
-rotationArr = getRotationlist(timestampArr,feaArrfilt)
+#print len(timestampArr),len(feaArr)
+rotationArr = getRotationlist(timestampArr,filtfea)
 
 plt.figure(1)
 ax1 = plt.subplot(311)
@@ -261,9 +252,9 @@ plt.plot(range(len(rotationArr)),rotationArr[:,2],color = 'blue',linewidth = 1.0
 plt.xlim(0,len(rotationArr))
 plt.ylim(-180,180)
 
-
+feaArrfilt = filtfea
 startpoint = 0
-endpoint = len(feaArr)
+endpoint = len(feaArrfilt)
 
 plt.figure(2)
 ax1 = plt.subplot(311)
@@ -314,7 +305,7 @@ plt.plot(range(startpoint,endpoint),feaArrfilt[startpoint:endpoint,5],color = 'r
 plt.xlim(startpoint,endpoint)
 plt.ylim(-5.0,5.0)
 plt.show()
-
+'''
 #savefig('figure/dong ting/gyros_z_4.png',dpi = 80)
 #activities = [feaArr]
 
