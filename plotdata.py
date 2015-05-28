@@ -7,7 +7,9 @@ import math
 import xlwt
 import matplotlib.pyplot as plt
 from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import DBSCAN
 from dtw import dtw
+from hcluster import hcluster
 '''
 fileList = getFileList("dataset",[])
 for e in fileList:
@@ -37,18 +39,17 @@ def filtSensordata(feaArr):
 def detectStep(accez,start,end):
     steppoint = 0
     i = start+1
-    while i < end:
+    while i < end-1:
         maxpoint = 0
         minpoint = 0
-        if accez[i] > accez[i-1] and accez[i] > accez[i+1] and accez[i] > 0.5:
+        if accez[i] > accez[i-1] and accez[i] > accez[i+1] and accez[i]>1.0:
             maxpoint = i
-            print "peak:%d" % maxpoint
             j = i+1
-            while j < end:
-                if accez[j] < accez[j-1] and accez[j] < accez[j+1] and accez[j] < -0.5:
+            while j < end-2:
+                if accez[j] < accez[j-1] and accez[j] < accez[j+1] and\
+                accez[j]<-1.0:
                     minpoint = j
-                    if 10 < minpoint - maxpoint < 105:
-                        print "valley:%d" % minpoint
+                    if 10 < minpoint - maxpoint < 80:
                         z = i
                         while abs(accez[z]) > 0.2 and z > start:
                             z += -1
@@ -69,11 +70,11 @@ def detectActivity(sensordata):
     start = 0
     end = 1
     fealen = len(feaArr)
-    while start < end and start < fealen and end < fealen:
+    while start < end and start+200 < fealen and end < fealen:
         if (not detectStep(accezfilt,start,start+200)) and start < end:
             startpoint = start
             print "detect one activity start point %d" %(startpoint)
-            steppoint = detectStep(accezfilt,start,len(accezfilt))
+            steppoint = detectStep(accezfilt,start,len(accezfilt)-1)
             if steppoint and steppoint - startpoint > 50:
                 endpoint = steppoint
                 print "detect one activity endpoint:%d" % endpoint
@@ -103,21 +104,19 @@ def miniActivityType(accex,accey):
         type = '4'
     return type
 #detect split point of activity and divide activity into several miniactivities
-def detectSplitPoint(rotateveclist):
+def detectSplitPoint(gyros,window_len,step):
     splitpoint = []
-    i = 1
-    lastpoint = rotateveclist[0,:]
-    for j in range(3):
-        for i in range(len(rotateveclist)):
-            if (rotateveclist[i-1,j]<rotateveclist[i,j] and\
-            rotateveclist[i,j]>rotateveclist[i+1,j] and\
-            abs(rotateveclist[i,j]-lastpoint[j])>30) or\
-            (rotateveclist[i,j]<rotateveclist[i-1,j] and\
-            rotateveclist[i,j]<rotateveclist[i+1,j] and\
-            abs(rotateveclist[i,j]-lastpoint[j])>30):
-                splitpoint.append(i)
-                lastpoint[j] = rotateveclist[i,j]
-    splitpoint.sort()
+    for i in range(0,len(gyros)-window_len,step):
+        if abs(mean(gyros[i+2*step:i+2*step+window_len,2]))>0.5 and\
+        abs(mean(gyros[i:i+window_len,2]))<0.3:
+            if not (i+step in splitpoint):
+                splitpoint.append(i+2*step)
+                print "start to turn at:%d"%(i+2*step)
+        elif abs(mean(gyros[i:i+window_len,2]))>0.5 and\
+        abs(mean(gyros[i+2*step:i+2*step+window_len,2]))<0.3:
+            if not (i+step in splitpoint):
+                splitpoint.append(i+2*step)
+                print "end turning at:%d"%(i+2*step)
     return splitpoint
     
 #divide activity into seveval miniactivities based on motion orientation
@@ -127,54 +126,57 @@ def divideMiniActivity(activities):
         activity = array(activity)
         timestamp = activity[:,0]
         feaArr = activity[:,1:7]
-        rotationvecArr = getRotationlist(timestamp,feaArr)
-        splitpointlist = detectSplitPoint(rotationvecArr)
-        start = 0
+        #rotationvecArr = getRotationArr(timestamp,feaArr)
+        splitpointlist = detectSplitPoint(feaArr[:,3:6],10,5)
         miniactivities = []
-        for splitpoint in splitpointlist:
-            end = splitpoint
+        start = 0
+        for point in splitpointlist:
+            end = point
             miniactivities.append(activity[start:end,:])
             start = end
         miniActofAllAct.append(miniactivities)
     return miniActofAllAct
 
 #extract features of mean and std from filter sample.
+#every mini activity consist of
+#[accemodavg,accexmean,accexstd,acceymean,acceystd,accezmean,accezstd,rotaionx,rotationy,rotationz]
 def feaExtraction(activities):
     actlength= len(activities)
     feasOfAct = []
     for activity in activities:
         activityfea = []
-        for miniact in activity:
+        for miniactvalues in activity:
             miniactfea = []
-            miniacttype = miniact["type"]
-            miniactvalues = array(miniact["value"])
-            accemod = []
-            for accex,accey,accez in miniactvalues[:,0:3]:
+            accemodlist = []
+            for accex,accey,accez in miniactvalues[:,1:4]:
                 acce2 = accex**2+accey**2+accez**2
-                accemod.append(math.sqrt(acce2))
-            accexmean = mean(miniactvalues[:,0])
-            accexstd = std(miniactvalues[:,0])
-            acceymean = mean(miniactvalues[:,1])
-            acceystd = std(miniactvalues[:,1])
-            accezmean = mean(miniactvalues[:,2])
-            accezstd = std(miniactvalues[:,2])
-            rotationlist = getRotationList(timestampArr,feaArrfilt) 
-            miniactfea.append(miniacttype)
+                accemodlist.append(math.sqrt(acce2))
+            accemodavg = mean(accemodlist)
+            accexmean = mean(miniactvalues[:,1])
+            accexstd = std(miniactvalues[:,1])
+            acceymean = mean(miniactvalues[:,2])
+            acceystd = std(miniactvalues[:,2])
+            accezmean = mean(miniactvalues[:,3])
+            accezstd = std(miniactvalues[:,3])
+            timestampArr = miniactvalues[:,0]
+            feaArr = miniactvalues[:,1:7]
+            rotationlist = getRotationArr(timestampArr,feaArr) 
+            miniactfea.append(accemodavg)
             miniactfea.append(accexmean)
             miniactfea.append(accexstd)
             miniactfea.append(acceymean)
             miniactfea.append(acceystd)
             miniactfea.append(accezmean)
             miniactfea.append(accezstd)
-            miniactfea.append(ratationlist[-1,0])
-            miniactfea.append(ratationlist[-1,1])
-            miniactfea.append(ratationlist[-1,2])
+            miniactfea.append(rotationlist[-1,0])
+            miniactfea.append(rotationlist[-1,1])
+            miniactfea.append(rotationlist[-1,2])
             activityfea.append(miniactfea)
         feasOfAct.append(activityfea) 
     return feasOfAct
 
 #get the rotation of gyrosscope of three axis
-def getRotationlist(timestamp,feaArr):
+def getRotationArr(timestamp,feaArr):
     if len(timestamp) != len(feaArr):
         print "timestamp is not as long as feaArr" 
     rotationx = 0.0
@@ -199,36 +201,35 @@ def dtwDist(x):
     dist = zeros((length,length))
     for i in range(length):
         for j in range(length):
-            distance,cost,path=dtw(x[i,:],x[j,:])
+            distance,cost,path=dtw(x[i,:],x[j,:],dist=np.linalg.norm)
             dist[i,j]=distance
     return dist
 
 
 dataset = loadDataSet("dataset/5.13/LiuYulu")
+print "dataset number:%d"%len(dataset)
 activitiesofAll = []
-data = dataset[5]
-feaArr = data[:,3:9]
-timestamp = data[:,0]
-filtfea = filtSensordata(feaArr)
-timestamp = map(lambda x:float(x),timestamp)
-timestampArr = np.array([timestamp]).T
-sensordata = np.append(timestampArr,filtfea,1)
-activities = detectActivity(sensordata)
-activitiesofAll.append(activities)
-'''
-print len(activitiesofAll)
-activitiesofMini = divideMiniActivity(activities)
+#data = dataset[5]
+for i in range(len(dataset)):
+    feaArr = dataset[i][:,3:9]
+    timestamp = dataset[i][:,0]
+    filtfea = filtSensordata(feaArr)
+    timestamp = map(lambda x:float(x),timestamp)
+    timestampArr = np.array([timestamp]).T
+    sensordata = np.append(timestampArr,filtfea,1)
+    activities = detectActivity(sensordata)
+    print "the %dth file contains:%d activities"%(i,len(activities))
+    activitiesofAll += activities
+print "activity number:%d" % len(activitiesofAll)
+activitiesofMini = divideMiniActivity(activitiesofAll)
 activitiesfea = feaExtraction(activitiesofMini)
-model = AgglomerativeClustering(n_clusters=n_clusters,linkage="average",affinity=dtwDist)
-model.fit(activitiesfea)
-print model.label_
-
-
-'''
-
-
+n_clusters = 3
+#x=array([[[1,1,1],[2,2,2],[3,3,3]],[[1,1,1],[2,2,2],[3,3,3]],[[4,4,4],[5,5,5],[6,6,6]],[[4,4,4],[5,5,5],[6,6,6]]])
+k,l = hcluster(activitiesfea,4)
+print l
 #print len(timestampArr),len(feaArr)
-rotationArr = getRotationlist(timestampArr,filtfea)
+'''
+rotationArr = getRotationArr(timestamp,filtfea)
 
 plt.figure(1)
 ax1 = plt.subplot(311)
@@ -236,21 +237,21 @@ plt.ylabel(u'rotationx')
 plt.xlabel(u'sample')
 plt.plot(range(len(rotationArr)),rotationArr[:,0],color = 'red',linewidth = 1.0)
 plt.xlim(0,len(rotationArr))
-plt.ylim(-180,180)
+plt.ylim(-200,200)
 
 ax2 = plt.subplot(312)
 plt.ylabel(u'rotationy')
 plt.xlabel(u'sample')
 plt.plot(range(len(rotationArr)),rotationArr[:,1],color = 'green',linewidth = 1.0)
 plt.xlim(0,len(rotationArr))
-plt.ylim(-180,180)
+plt.ylim(-200,200)
 
 ax1 = plt.subplot(313)
 plt.ylabel(u'rotationz')
 plt.xlabel(u'sample')
 plt.plot(range(len(rotationArr)),rotationArr[:,2],color = 'blue',linewidth = 1.0)
 plt.xlim(0,len(rotationArr))
-plt.ylim(-180,180)
+plt.ylim(-200,200)
 
 feaArrfilt = filtfea
 startpoint = 0
@@ -305,6 +306,7 @@ plt.plot(range(startpoint,endpoint),feaArrfilt[startpoint:endpoint,5],color = 'r
 plt.xlim(startpoint,endpoint)
 plt.ylim(-5.0,5.0)
 plt.show()
+'''
 '''
 #savefig('figure/dong ting/gyros_z_4.png',dpi = 80)
 #activities = [feaArr]
